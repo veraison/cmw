@@ -3,6 +3,7 @@
 
 package cmw
 
+// Indicator is the internal representation of the `cm-ind` bit map
 type Indicator uint
 
 const (
