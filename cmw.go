@@ -134,7 +134,7 @@ func sniff(b []byte) Serialization {
 
 	if b[0] == 0x82 || b[0] == 0x83 {
 		return CBORArray
-	} else if b[0] >= 0xc0 && b[0] <= 0xdf {
+	} else if b[0] >= 0xc0 && b[0] <= 0xdb {
 		return CBORTag
 	} else if b[0] == 0x5b {
 		return JSONArray
