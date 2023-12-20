@@ -84,6 +84,7 @@ func Test_Deserialize_ok(t *testing.T) {
 				Type{uint16(30001)},
 				[]byte{0xde, 0xad, 0xbe, 0xef},
 				IndicatorNone,
+				JSONArray,
 			},
 		},
 		{
@@ -93,6 +94,7 @@ func Test_Deserialize_ok(t *testing.T) {
 				Type{"application/vnd.intel.sgx"},
 				[]byte{0xde, 0xad, 0xbe, 0xef},
 				IndicatorNone,
+				JSONArray,
 			},
 		},
 		{
@@ -102,6 +104,7 @@ func Test_Deserialize_ok(t *testing.T) {
 				Type{"application/vnd.intel.sgx"},
 				[]byte{0xde, 0xad, 0xbe, 0xef},
 				testIndicator,
+				JSONArray,
 			},
 		},
 		{
@@ -112,6 +115,7 @@ func Test_Deserialize_ok(t *testing.T) {
 				Type{uint16(30001)},
 				[]byte{0xde, 0xad, 0xbe, 0xef},
 				IndicatorNone,
+				CBORArray,
 			},
 		},
 		{
@@ -127,6 +131,7 @@ func Test_Deserialize_ok(t *testing.T) {
 				Type{string("application/vnd.intel.sgx")},
 				[]byte{0xde, 0xad, 0xbe, 0xef},
 				IndicatorNone,
+				CBORArray,
 			},
 		},
 		{
@@ -139,6 +144,7 @@ func Test_Deserialize_ok(t *testing.T) {
 				Type{uint64(1668576818)},
 				[]byte{0xde, 0xad, 0xbe, 0xef},
 				IndicatorNone,
+				CBORTag,
 			},
 		},
 	}
@@ -203,8 +209,9 @@ func Test_Serialize_JSONArray_ok(t *testing.T) {
 			cmw.SetMediaType(tt.tv.typ)
 			cmw.SetValue(tt.tv.val)
 			cmw.SetIndicators(tt.tv.ind...)
+			cmw.SetSerialization(JSONArray)
 
-			actual, err := cmw.Serialize(JSONArray)
+			actual, err := cmw.Serialize()
 			assert.NoError(t, err)
 			assert.JSONEq(t, tt.exp, string(actual))
 		})
@@ -259,8 +266,9 @@ func Test_Serialize_CBORArray_ok(t *testing.T) {
 			cmw.SetContentFormat(tt.tv.typ)
 			cmw.SetValue(tt.tv.val)
 			cmw.SetIndicators(tt.tv.ind...)
+			cmw.SetSerialization(CBORArray)
 
-			actual, err := cmw.Serialize(CBORArray)
+			actual, err := cmw.Serialize()
 			assert.NoError(t, err)
 			assert.Equal(t, tt.exp, actual)
 		})
@@ -310,8 +318,9 @@ func Test_Serialize_CBORTag_ok(t *testing.T) {
 
 			cmw.SetTagNumber(tt.tv.typ)
 			cmw.SetValue(tt.tv.val)
+			cmw.SetSerialization(CBORTag)
 
-			actual, err := cmw.Serialize(CBORTag)
+			actual, err := cmw.Serialize()
 			assert.NoError(t, err)
 			assert.Equal(t, tt.exp, actual)
 		})
@@ -441,7 +450,7 @@ func Test_Deserialize_CBORArray_ko(t *testing.T) {
 				0x82, 0xfb, 0x40, 0x8f, 0x41, 0xd7, 0x0a, 0x3d, 0x70, 0xa4,
 				0x44, 0xde, 0xad, 0xbe, 0xef,
 			},
-			`unmarshaling type: cannot unmarshal 1000.230000 into uint16`,
+			`invalid CBOR-encoded CMW`,
 		},
 		{
 			"overflow for type",
@@ -450,7 +459,7 @@ func Test_Deserialize_CBORArray_ko(t *testing.T) {
 				0x82, 0x1a, 0x00, 0x01, 0x00, 0x00, 0x44, 0xde, 0xad, 0xbe,
 				0xef,
 			},
-			`unmarshaling type: cannot unmarshal 65536 into uint16`,
+			`invalid CBOR-encoded CMW`,
 		},
 		{
 			"bad type (float) for value",
@@ -459,7 +468,7 @@ func Test_Deserialize_CBORArray_ko(t *testing.T) {
 				0x82, 0x19, 0xff, 0xff, 0xfb, 0x3f, 0xf3, 0x33, 0x33, 0x33,
 				0x33, 0x33, 0x33,
 			},
-			`unmarshaling value: cannot decode value: cbor: cannot unmarshal primitives into Go value of type []uint8`,
+			`invalid CBOR-encoded CMW`,
 		},
 	}
 
@@ -481,13 +490,13 @@ func Test_Deserialize_CBORTag(t *testing.T) {
 		{
 			"empty CBOR Tag",
 			[]byte{0xda, 0x63, 0x74, 0x01, 0x01},
-			`unmarshal CMW CBOR Tag bstr-wrapped value: EOF`,
+			`invalid CBOR-encoded CMW`,
 		},
 		{
 			"bad type (uint) for value",
 			// echo "1668546817(1)" | diag2cbor.rb | xxd -i
 			[]byte{0xda, 0x63, 0x74, 0x01, 0x01, 0x01},
-			`unmarshal CMW CBOR Tag bstr-wrapped value: cbor: cannot unmarshal positive integer into Go value of type []uint8`,
+			`invalid CBOR-encoded CMW`,
 		},
 	}
 
@@ -504,28 +513,42 @@ func Test_EncodeArray_sanitize_input(t *testing.T) {
 	var cmw CMW
 
 	for _, s := range []Serialization{CBORArray, JSONArray} {
-		_, err := cmw.Serialize(s)
+		cmw.SetSerialization(s)
+		_, err := cmw.Serialize()
 		assert.EqualError(t, err, "type and value MUST be set in CMW")
 	}
 
 	cmw.SetValue([]byte{0xff})
 
 	for _, s := range []Serialization{CBORArray, JSONArray} {
-		_, err := cmw.Serialize(s)
+		cmw.SetSerialization(s)
+		_, err := cmw.Serialize()
 		assert.EqualError(t, err, "type and value MUST be set in CMW")
 	}
 
 	cmw.SetMediaType("")
 
 	for _, s := range []Serialization{CBORArray, JSONArray} {
-		_, err := cmw.Serialize(s)
+		cmw.SetSerialization(s)
+		_, err := cmw.Serialize()
 		assert.EqualError(t, err, "type and value MUST be set in CMW")
 	}
 
 	cmw.SetContentFormat(0)
 
 	for _, s := range []Serialization{CBORArray, JSONArray} {
-		_, err := cmw.Serialize(s)
+		cmw.SetSerialization(s)
+		_, err := cmw.Serialize()
 		assert.NoError(t, err)
 	}
+}
+
+func Test_Serialize_invalid_serialization(t *testing.T) {
+	var tv CMW
+
+	tv.SetMediaType("application/vnd.x")
+	tv.SetValue([]byte{0x00})
+
+	_, err := tv.Serialize()
+	assert.Error(t, err, "TPDP")
 }

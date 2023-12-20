@@ -14,18 +14,19 @@ import (
 type Serialization uint
 
 const (
-	JSONArray = Serialization(iota)
+	UnknownSerialization = Serialization(iota)
+	JSONArray
 	CBORArray
 	CBORTag
-	Unknown
 )
 
 // a CMW object holds the internal representation of a RATS conceptual message
 // wrapper
 type CMW struct {
-	typ Type
-	val Value
-	ind Indicator
+	typ           Type
+	val           Value
+	ind           Indicator
+	serialization Serialization
 }
 
 func (o *CMW) SetMediaType(v string)     { _ = o.typ.Set(v) }
@@ -41,41 +42,55 @@ func (o *CMW) SetIndicators(indicators ...Indicator) {
 
 	o.ind = v
 }
+func (o *CMW) SetSerialization(s Serialization) { o.serialization = s }
 
-func (o CMW) GetValue() []byte        { return o.val }
-func (o CMW) GetType() string         { return o.typ.String() }
-func (o CMW) GetIndicator() Indicator { return o.ind }
+func (o CMW) GetValue() []byte                { return o.val }
+func (o CMW) GetType() string                 { return o.typ.String() }
+func (o CMW) GetIndicator() Indicator         { return o.ind }
+func (o CMW) GetSerialization() Serialization { return o.serialization }
 
 // Deserialize a CMW
 func (o *CMW) Deserialize(b []byte) error {
-	switch sniff(b) {
+	s := sniff(b)
+
+	o.serialization = s
+
+	switch s {
 	case JSONArray:
 		return o.UnmarshalJSON(b)
-	case CBORArray:
+	case CBORArray, CBORTag:
 		return o.UnmarshalCBOR(b)
-	case CBORTag:
-		return o.UnmarshalCBORTag(b)
 	}
+
 	return errors.New("unknown CMW format")
 }
 
-// Serialize a CMW according to the provided Serialization
-func (o CMW) Serialize(s Serialization) ([]byte, error) {
+// Serialize a CMW according to its provided Serialization
+func (o CMW) Serialize() ([]byte, error) {
+	s := o.serialization
 	switch s {
 	case JSONArray:
 		return o.MarshalJSON()
-	case CBORArray:
+	case CBORArray, CBORTag:
 		return o.MarshalCBOR()
-	case CBORTag:
-		return o.MarshalCBORTag()
 	}
 	return nil, fmt.Errorf("invalid serialization format %d", s)
 }
 
 func (o CMW) MarshalJSON() ([]byte, error) { return arrayEncode(json.Marshal, &o) }
-func (o CMW) MarshalCBOR() ([]byte, error) { return arrayEncode(cbor.Marshal, &o) }
 
-func (o CMW) MarshalCBORTag() ([]byte, error) {
+func (o CMW) MarshalCBOR() ([]byte, error) {
+	s := o.serialization
+	switch s {
+	case CBORArray:
+		return arrayEncode(cbor.Marshal, &o)
+	case CBORTag:
+		return o.encodeCBORTag()
+	}
+	return nil, fmt.Errorf("invalid serialization format: want CBORArray or CBORTag, got %d", s)
+}
+
+func (o CMW) encodeCBORTag() ([]byte, error) {
 	var (
 		tag cbor.RawTag
 		err error
@@ -99,14 +114,26 @@ func (o CMW) MarshalCBORTag() ([]byte, error) {
 }
 
 func (o *CMW) UnmarshalCBOR(b []byte) error {
-	return arrayDecode[cbor.RawMessage](cbor.Unmarshal, b, o)
+	if arrayDecode[cbor.RawMessage](cbor.Unmarshal, b, o) == nil {
+		o.serialization = CBORArray
+		return nil
+	}
+
+	if o.decodeCBORTag(b) == nil {
+		// the serialization attribute is set by decodeCBORTag
+		return nil
+	}
+
+	return errors.New("invalid CBOR-encoded CMW")
 }
 
 func (o *CMW) UnmarshalJSON(b []byte) error {
-	return arrayDecode[json.RawMessage](json.Unmarshal, b, o)
+	err := arrayDecode[json.RawMessage](json.Unmarshal, b, o)
+	o.serialization = JSONArray
+	return err
 }
 
-func (o *CMW) UnmarshalCBORTag(b []byte) error {
+func (o *CMW) decodeCBORTag(b []byte) error {
 	var (
 		v   cbor.RawTag
 		m   []byte
@@ -123,13 +150,14 @@ func (o *CMW) UnmarshalCBORTag(b []byte) error {
 
 	_ = o.typ.Set(v.Number)
 	_ = o.val.Set(m)
+	o.serialization = CBORTag
 
 	return nil
 }
 
 func sniff(b []byte) Serialization {
 	if len(b) == 0 {
-		return Unknown
+		return UnknownSerialization
 	}
 
 	if b[0] == 0x82 || b[0] == 0x83 {
@@ -140,12 +168,12 @@ func sniff(b []byte) Serialization {
 		return JSONArray
 	}
 
-	return Unknown
+	return UnknownSerialization
 }
 
 type (
-	arrayDecoder func([]byte, interface{}) error
-	arrayEncoder func(interface{}) ([]byte, error)
+	arrayDecoder func([]byte, any) error
+	arrayEncoder func(any) ([]byte, error)
 )
 
 func arrayDecode[V json.RawMessage | cbor.RawMessage](
@@ -185,7 +213,7 @@ func arrayEncode(enc arrayEncoder, o *CMW) ([]byte, error) {
 		return nil, fmt.Errorf("type and value MUST be set in CMW")
 	}
 
-	a := []interface{}{o.typ, o.val}
+	a := []any{o.typ, o.val}
 
 	if !o.ind.Empty() {
 		a = append(a, o.ind)
