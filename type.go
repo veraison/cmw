@@ -47,8 +47,8 @@ func (o *Type) UnmarshalJSON(b []byte) error { return typeDecode(json.Unmarshal,
 func (o *Type) UnmarshalCBOR(b []byte) error { return typeDecode(cbor.Unmarshal, b, o) }
 
 type (
-	typeDecoder func([]byte, interface{}) error
-	typeEncoder func(interface{}) ([]byte, error)
+	typeDecoder func([]byte, any) error
+	typeEncoder func(any) ([]byte, error)
 )
 
 func typeDecode(dec typeDecoder, b []byte, o *Type) error {
