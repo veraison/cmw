@@ -15,41 +15,55 @@ type Collection struct {
 	m map[any]CMW
 }
 
-type CollectionSerialization uint
-
-const (
-	UnknownCollectionSerialization = CollectionSerialization(iota)
-	CollectionSerializationJSON
-	CollectionSerializationCBOR
-)
-
 // Deserialize a JSON or CBOR collection
 func (o *Collection) Deserialize(b []byte) error {
 	switch b[0] {
 	case 0x7b: // '{'
-		return o.UnmarshalJSON(b)
+		return o.Unmarshal(JSON, b)
 	default:
-		return o.UnmarshalCBOR(b)
+		return o.Unmarshal(CBOR, b)
 	}
 }
 
 // Serialize the collection.  The type of serialization depends on the
 // serialization specified for each item.  Items must have compatible
 // serializations: CBORArray/CBORTag or JSON.
-func (o *Collection) Serialize() ([]byte, error) {
-	s, err := o.detectSerialization()
-	if err != nil {
-		return nil, err
+func (o *Collection) Serialize(s Serialization) ([]byte, error) {
+	var b []byte
+	var err error
+	m := make(map[any][]byte)
+
+	for i, v := range o.m {
+		c, err := v.Serialize(s)
+		if err != nil {
+			return nil, fmt.Errorf("marshaling collection item %v: %w", i, err)
+		}
+		switch t := i.(type) {
+		case string:
+			m[t] = c
+		case uint64:
+			if s == JSON {
+				return nil, errors.New("collection, key error: int64 illegal for JSON serialization")
+			}
+			m[t] = c
+		default:
+			return nil, fmt.Errorf("collection, key error: want string or int64, got %T", t)
+		}
 	}
 
 	switch s {
-	case CollectionSerializationCBOR:
-		return o.MarshalCBOR()
-	case CollectionSerializationJSON:
-		return o.MarshalJSON()
+	case CBOR:
+		b, err = cbor.Marshal(m)
+	case JSON:
+		b, err = json.Marshal(m)
 	default:
-		return nil, errors.New("unsupported serialization")
+		return nil, fmt.Errorf("collection serialization format not supported: %d", s)
 	}
+	if err != nil {
+		return nil, fmt.Errorf("marshaling collection: %w", err)
+	}
+
+	return b, nil
 }
 
 // GetMap returns a pointer to the internal map
@@ -74,62 +88,21 @@ func (o *Collection) AddItem(k any, c CMW) {
 	o.m[k] = c
 }
 
-// MarshalJSON serializes the collection to JSON
-func (o Collection) MarshalJSON() ([]byte, error) {
-	m := make(map[string]json.RawMessage)
-
-	for i, v := range o.m {
-		c, err := v.Serialize()
-		if err != nil {
-			return nil, fmt.Errorf("marshaling JSON collection item %v: %w", i, err)
-		}
-		switch t := i.(type) {
-		case string:
-			m[t] = c
-		default:
-			return nil, fmt.Errorf("JSON collection, key error: want string, got %T", t)
-		}
-	}
-
-	b, err := json.Marshal(m)
-	if err != nil {
-		return nil, fmt.Errorf("marshaling JSON collection: %w", err)
-	}
-
-	return b, nil
-}
-
-// MarshalCBOR serializes the collection to CBOR
-func (o Collection) MarshalCBOR() ([]byte, error) {
-	m := make(map[any]cbor.RawMessage)
-
-	for i, v := range o.m {
-		c, err := v.Serialize()
-		if err != nil {
-			return nil, fmt.Errorf("marshaling CBOR collection item %v: %w", i, err)
-		}
-		switch t := i.(type) {
-		case string, uint64:
-			m[t] = c
-		default:
-			return nil, fmt.Errorf("CBOR collection, key error: want string or int64, got %T", t)
-		}
-	}
-
-	b, err := cbor.Marshal(m)
-	if err != nil {
-		return nil, fmt.Errorf("marshaling CBOR collection: %w", err)
-	}
-
-	return b, nil
-}
-
 // UnmarshalCBOR unmarshal the supplied CBOR buffer to a CMW collection
-func (o *Collection) UnmarshalCBOR(b []byte) error {
-	var tmp map[any]cbor.RawMessage
+func (o *Collection) Unmarshal(s Serialization, b []byte) error {
+	var tmp map[any][]byte
+	var err error
 
-	if err := cbor.Unmarshal(b, &tmp); err != nil {
-		return fmt.Errorf("unmarshaling CBOR collection: %w", err)
+	switch s {
+	case CBOR:
+		cbor.Unmarshal(b, &tmp)
+	case JSON:
+		json.Unmarshal(b, &tmp)
+	default:
+		return fmt.Errorf("collection serialization format not supported: %d", s)
+	}
+	if err != nil {
+		return fmt.Errorf("unmarshaling collection: %w", err)
 	}
 
 	m := make(map[any]CMW)
@@ -137,7 +110,7 @@ func (o *Collection) UnmarshalCBOR(b []byte) error {
 	for k, v := range tmp {
 		var c CMW
 		if err := c.Deserialize(v); err != nil {
-			return fmt.Errorf("unmarshaling CBOR collection item %v: %w", k, err)
+			return fmt.Errorf("unmarshaling collection item %v: %w", k, err)
 		}
 		m[k] = c
 	}
@@ -147,54 +120,16 @@ func (o *Collection) UnmarshalCBOR(b []byte) error {
 	return nil
 }
 
-// UnmarshalJSON unmarshals the supplied JSON buffer to a CMW collection
-func (o *Collection) UnmarshalJSON(b []byte) error {
-	var tmp map[string]json.RawMessage
-
-	if err := json.Unmarshal(b, &tmp); err != nil {
-		return fmt.Errorf("unmarshaling JSON collection: %w", err)
+func sniff_collection(b []byte) bool {
+	if len(b) == 0 {
+		return false
 	}
 
-	m := make(map[any]CMW)
-
-	for k, v := range tmp {
-		var c CMW
-		if err := c.Deserialize(v); err != nil {
-			return fmt.Errorf("unmarshaling JSON collection item %v: %w", k, err)
-		}
-		m[k] = c
+	if b[0] == 0x7b {
+		return true
+	} else if (b[0] >= 0xa0 && b[0] <= 0xbb) || b[0] == 0xbf {
+		return true
 	}
 
-	o.m = m
-
-	return nil
-}
-
-func (o Collection) detectSerialization() (CollectionSerialization, error) {
-	rec := make(map[CollectionSerialization]bool)
-
-	s := UnknownCollectionSerialization
-
-	for k, v := range o.m {
-		switch v.serialization {
-		case CBORArray, CBORTag:
-			s = CollectionSerializationCBOR
-			rec[s] = true
-		case JSONArray:
-			s = CollectionSerializationJSON
-			rec[s] = true
-		default:
-			return UnknownCollectionSerialization,
-				fmt.Errorf(
-					"serialization not defined for collection item with k %v", k,
-				)
-		}
-	}
-
-	if len(rec) != 1 {
-		return UnknownCollectionSerialization,
-			errors.New("CMW collection has items with incompatible serializations")
-	}
-
-	return s, nil
+	return false
 }
