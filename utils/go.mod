@@ -1,6 +1,6 @@
 module main
 
-go 1.19
+go 1.23.0
 
 require golang.org/x/net v0.36.0
 
