@@ -35,6 +35,9 @@ func main() {
 					strings.Contains(mt, "TEMPORARY") {
 					continue
 				}
+				if x.Contentcoding != "" {
+					continue
+				}
 				id, err := strconv.Atoi(x.ID)
 				if err != nil {
 					log.Fatal(err)
