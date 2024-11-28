@@ -1,4 +1,4 @@
-name: cover ≥88%
+name: cover ≥84%
 on: [push, pull_request]
 jobs:
   cover:
