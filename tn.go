@@ -17,22 +17,22 @@ const (
 
 // See https://www.rfc-editor.org/rfc/rfc9277.html#section-4.3
 
-// CBOR Tag number from CoAP Content-Format number
-func TN(cf uint16) uint64 {
+// TN computes CBOR Tag numbers from CoAP Content-Format IDs
+func TN(cf uint16) (uint64, error) {
 	// No tag numbers are assigned for Content-Format numbers in range
 	// [65025, 65535]
 	if cf > CfMax {
 		// 18446744073709551615	is registered as "Invalid Tag", so it's good as
 		// a "nope" return value
-		return ^uint64(0)
+		return ^uint64(0), fmt.Errorf("C-F ID %d out of range", cf)
 	}
 
 	cf64 := uint64(cf)
 
-	return TnMin + (cf64/255)*256 + cf64%255
+	return TnMin + (cf64/255)*256 + cf64%255, nil
 }
 
-// CoAP Content-Format from number CBOR Tag number
+// CF computes CoAP Content-Format IDs from CBOR Tag numbers
 func CF(tn uint64) (uint16, error) {
 	if tn < TnMin || tn > TnMax {
 		return 0, fmt.Errorf("TN %d out of range", tn)

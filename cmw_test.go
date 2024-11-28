@@ -7,29 +7,30 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_sniff(t *testing.T) {
 	tests := []struct {
 		name string
 		args []byte
-		want Serialization
+		want Format
 	}{
 		{
 			"JSON array with CoAP C-F",
 			[]byte(`[30001, "3q2-7w"]`),
-			JSONArray,
+			FormatJSONRecord,
 		},
 		{
 			"JSON array with media type string",
 			[]byte(`["application/vnd.intel.sgx", "3q2-7w"]`),
-			JSONArray,
+			FormatJSONRecord,
 		},
 		{
 			"CBOR array with CoAP C-F",
 			// echo "[30001, h'deadbeef']" | diag2cbor.rb | xxd -p -i
 			[]byte{0x82, 0x19, 0x75, 0x31, 0x44, 0xde, 0xad, 0xbe, 0xef},
-			CBORArray,
+			FormatCBORRecord,
 		},
 		{
 			"CBOR array with media type string",
@@ -40,7 +41,7 @@ func Test_sniff(t *testing.T) {
 				0x6e, 0x74, 0x65, 0x6c, 0x2e, 0x73, 0x67, 0x78, 0x44, 0xde,
 				0xad, 0xbe, 0xef,
 			},
-			CBORArray,
+			FormatCBORRecord,
 		},
 		{
 			"CBOR tag",
@@ -48,507 +49,134 @@ func Test_sniff(t *testing.T) {
 			[]byte{
 				0xda, 0x63, 0x74, 0x76, 0x32, 0x44, 0xde, 0xad, 0xbe, 0xef,
 			},
-			CBORTag,
-		},
-		{
-			"CBOR Tag Intel",
-			// echo "60000(h'deadbeef')" | diag2cbor.rb| xxd -i
-			[]byte{0xd9, 0xea, 0x60, 0x44, 0xde, 0xad, 0xbe, 0xef},
-			CBORTag,
+			FormatCBORTag,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := sniff(tt.args); got != tt.want {
+			if got := Sniff(tt.args); got != tt.want {
 				t.Errorf("[TC: %s] sniff() = %v, want %v", tt.name, got, tt.want)
 			}
 		})
 	}
 }
 
-var (
-	testIndicator = Indicator(31)
-)
+func Test_NewMonad(t *testing.T) {
+	typ := "text/plain; charset=utf-8"
+	val := []byte{0xff}
+	ind := Indicator(Evidence)
 
-func Test_Deserialize_ok(t *testing.T) {
-	tests := []struct {
-		name string
-		tv   []byte
-		exp  CMW
-	}{
-		{
-			"JSON array with CoAP C-F",
-			[]byte(`[30001, "3q2-7w"]`),
-			CMW{
-				Type{uint16(30001)},
-				[]byte{0xde, 0xad, 0xbe, 0xef},
-				IndicatorNone,
-				JSONArray,
-			},
-		},
-		{
-			"JSON array with media type string",
-			[]byte(`["application/vnd.intel.sgx", "3q2-7w"]`),
-			CMW{
-				Type{"application/vnd.intel.sgx"},
-				[]byte{0xde, 0xad, 0xbe, 0xef},
-				IndicatorNone,
-				JSONArray,
-			},
-		},
-		{
-			"JSON array with media type string and indicator",
-			[]byte(`["application/vnd.intel.sgx", "3q2-7w", 31]`),
-			CMW{
-				Type{"application/vnd.intel.sgx"},
-				[]byte{0xde, 0xad, 0xbe, 0xef},
-				testIndicator,
-				JSONArray,
-			},
-		},
-		{
-			"CBOR array with CoAP C-F",
-			// echo "[30001, h'deadbeef']" | diag2cbor.rb | xxd -p -i
-			[]byte{0x82, 0x19, 0x75, 0x31, 0x44, 0xde, 0xad, 0xbe, 0xef},
-			CMW{
-				Type{uint16(30001)},
-				[]byte{0xde, 0xad, 0xbe, 0xef},
-				IndicatorNone,
-				CBORArray,
-			},
-		},
-		{
-			"CBOR array with media type string",
-			// echo "[\"application/vnd.intel.sgx\", h'deadbeef']" | diag2cbor.rb | xxd -p -i
-			[]byte{
-				0x82, 0x78, 0x19, 0x61, 0x70, 0x70, 0x6c, 0x69, 0x63, 0x61,
-				0x74, 0x69, 0x6f, 0x6e, 0x2f, 0x76, 0x6e, 0x64, 0x2e, 0x69,
-				0x6e, 0x74, 0x65, 0x6c, 0x2e, 0x73, 0x67, 0x78, 0x44, 0xde,
-				0xad, 0xbe, 0xef,
-			},
-			CMW{
-				Type{string("application/vnd.intel.sgx")},
-				[]byte{0xde, 0xad, 0xbe, 0xef},
-				IndicatorNone,
-				CBORArray,
-			},
-		},
-		{
-			"CBOR tag",
-			// echo "1668576818(h'deadbeef')" | diag2cbor.rb | xxd -p -i
-			[]byte{
-				0xda, 0x63, 0x74, 0x76, 0x32, 0x44, 0xde, 0xad, 0xbe, 0xef,
-			},
-			CMW{
-				Type{uint64(1668576818)},
-				[]byte{0xde, 0xad, 0xbe, 0xef},
-				IndicatorNone,
-				CBORTag,
-			},
-		},
-	}
+	cmw, err := NewMonad(typ, val, ind)
+	require.NoError(t, err)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var actual CMW
+	assert.Equal(t, cmw.GetKind(), KindMonad)
 
-			err := actual.Deserialize(tt.tv)
-			assert.NoError(t, err)
+	actualType, err := cmw.GetMonadType()
+	require.NoError(t, err)
+	assert.Equal(t, typ, actualType)
 
-			assert.Equal(t, tt.exp, actual)
-		})
-	}
+	actualValue, err := cmw.GetMonadValue()
+	require.NoError(t, err)
+	assert.Equal(t, val, actualValue)
+
+	actualIndicator, err := cmw.GetMonadIndicator()
+	require.NoError(t, err)
+	assert.Equal(t, ind, actualIndicator)
 }
 
-func Test_Serialize_JSONArray_ok(t *testing.T) {
-	type args struct {
-		typ string
-		val []byte
-		ind []Indicator
-	}
-
-	tests := []struct {
-		name string
-		tv   args
-		exp  string
-	}{
-		{
-			"CoRIM w/ rv, endorsements and cots",
-			args{
-				"application/corim+signed",
-				[]byte{0xde, 0xad, 0xbe, 0xef},
-				[]Indicator{ReferenceValues, Endorsements, TrustAnchors},
-			},
-			`[ "application/corim+signed", "3q2-7w", 19 ]`,
-		},
-		{
-			"EAR",
-			args{
-				`application/eat+cwt; eat_profile="tag:github.com,2023:veraison/ear"`,
-				[]byte{0xde, 0xad, 0xbe, 0xef},
-				[]Indicator{},
-			},
-			`[ "application/eat+cwt; eat_profile=\"tag:github.com,2023:veraison/ear\"", "3q2-7w" ]`,
-		},
-		{
-			"EAT-based attestation results",
-			args{
-				`application/eat+cwt`,
-				[]byte{0xde, 0xad, 0xbe, 0xef},
-				[]Indicator{AttestationResults},
-			},
-			`[ "application/eat+cwt", "3q2-7w", 8 ]`,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var cmw CMW
-
-			cmw.SetMediaType(tt.tv.typ)
-			cmw.SetValue(tt.tv.val)
-			cmw.SetIndicators(tt.tv.ind...)
-			cmw.SetSerialization(JSONArray)
-
-			actual, err := cmw.Serialize()
-			assert.NoError(t, err)
-			assert.JSONEq(t, tt.exp, string(actual))
-		})
-	}
-}
-
-func Test_Serialize_CBORArray_ok(t *testing.T) {
-	type args struct {
-		typ uint16
-		val []byte
-		ind []Indicator
-	}
-
-	tests := []struct {
-		name string
-		tv   args
-		exp  []byte
-	}{
-		{
-			"CoRIM w/ rv, endorsements and cots",
-			args{
-				10000,
-				[]byte{0xde, 0xad, 0xbe, 0xef},
-				[]Indicator{ReferenceValues, Endorsements, TrustAnchors},
-			},
-			[]byte{0x83, 0x19, 0x27, 0x10, 0x44, 0xde, 0xad, 0xbe, 0xef, 0x13},
-		},
-		{
-			"EAR",
-			args{
-				10000,
-				[]byte{0xde, 0xad, 0xbe, 0xef},
-				[]Indicator{},
-			},
-			[]byte{0x82, 0x19, 0x27, 0x10, 0x44, 0xde, 0xad, 0xbe, 0xef},
-		},
-		{
-			"EAT-based attestation results",
-			args{
-				10001,
-				[]byte{0xde, 0xad, 0xbe, 0xef},
-				[]Indicator{AttestationResults},
-			},
-			[]byte{0x83, 0x19, 0x27, 0x11, 0x44, 0xde, 0xad, 0xbe, 0xef, 0x08},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var cmw CMW
-
-			cmw.SetContentFormat(tt.tv.typ)
-			cmw.SetValue(tt.tv.val)
-			cmw.SetIndicators(tt.tv.ind...)
-			cmw.SetSerialization(CBORArray)
-
-			actual, err := cmw.Serialize()
-			assert.NoError(t, err)
-			assert.Equal(t, tt.exp, actual)
-		})
-	}
-}
-
-func Test_Serialize_CBORTag_ok(t *testing.T) {
-	type args struct {
-		typ uint64
-		val []byte
-	}
-
-	tests := []struct {
-		name string
-		tv   args
-		exp  []byte
-	}{
-		{
-			"1",
-			args{
-				50000,
-				[]byte{0xde, 0xad, 0xbe, 0xef},
-			},
-			[]byte{0xd9, 0xc3, 0x50, 0x44, 0xde, 0xad, 0xbe, 0xef},
-		},
-		{
-			"2",
-			args{
-				50001,
-				[]byte{0xde, 0xad, 0xbe, 0xef},
-			},
-			[]byte{0xd9, 0xc3, 0x51, 0x44, 0xde, 0xad, 0xbe, 0xef},
-		},
-		{
-			"3",
-			args{
-				50002,
-				[]byte{0xde, 0xad, 0xbe, 0xef},
-			},
-			[]byte{0xd9, 0xc3, 0x52, 0x44, 0xde, 0xad, 0xbe, 0xef},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var cmw CMW
-
-			cmw.SetTagNumber(tt.tv.typ)
-			cmw.SetValue(tt.tv.val)
-			cmw.SetSerialization(CBORTag)
-
-			actual, err := cmw.Serialize()
-			assert.NoError(t, err)
-			assert.Equal(t, tt.exp, actual)
-		})
-	}
-}
-
-func Test_SettersGetters(t *testing.T) {
+func Test_Empty(t *testing.T) {
 	var cmw CMW
 
-	assert.Nil(t, cmw.GetValue())
-	assert.Empty(t, cmw.GetType())
-	assert.True(t, cmw.GetIndicator().Empty())
+	_, err := cmw.GetMonadType()
+	assert.EqualError(t, err, `want monad, got "unknown"`)
 
-	cmw.SetContentFormat(0)
-	assert.Equal(t, "text/plain; charset=utf-8", cmw.GetType())
+	_, err = cmw.GetMonadValue()
+	assert.EqualError(t, err, `want monad, got "unknown"`)
 
-	cmw.SetTagNumber(TnMin + 16)
-	assert.Equal(t, `application/cose; cose-type="cose-encrypt0"`, cmw.GetType())
+	_, err = cmw.GetMonadIndicator()
+	assert.EqualError(t, err, `want monad, got "unknown"`)
 
-	cmw.SetMediaType("application/eat+cwt")
-	assert.Equal(t, "application/eat+cwt", cmw.GetType())
+	_, err = cmw.MarshalCBOR()
+	assert.EqualError(t, err, `unknown CMW kind`)
 
-	cmw.SetValue([]byte{0xff})
-	assert.Equal(t, []byte{0xff}, cmw.GetValue())
+	_, err = cmw.MarshalJSON()
+	assert.EqualError(t, err, `unknown CMW kind`)
+
+	err = cmw.AddCollectionItem("test", nil)
+	assert.EqualError(t, err, `want collection, got "unknown"`)
 }
 
-func Test_Deserialize_JSONArray_ko(t *testing.T) {
-	tests := []struct {
-		name        string
-		tv          []byte
-		expectedErr string
-	}{
-		{
-			"empty JSONArray",
-			[]byte(`[]`),
-			`wrong number of entries (0) in the CMW array`,
-		},
-		{
-			"missing mandatory field in JSONArray (1)",
-			[]byte(`[10000]`),
-			`wrong number of entries (1) in the CMW array`,
-		},
-		{
-			"missing mandatory field in JSONArray (2)",
-			[]byte(`["3q2-7w"]`),
-			`wrong number of entries (1) in the CMW array`,
-		},
-		{
-			"too many entries in JSONArray",
-			[]byte(`[10000, "3q2-7w", 1, "EXTRA"]`),
-			`wrong number of entries (4) in the CMW array`,
-		},
-		{
-			"bad type (float) for type",
-			[]byte(`[10000.23, "3q2-7w"]`),
-			`unmarshaling type: cannot unmarshal 10000.230000 into uint16`,
-		},
-		{
-			"bad type (float) for value",
-			[]byte(`[10000, 1.2]`),
-			`unmarshaling value: cannot base64 url-safe decode: illegal base64 data at input byte 0`,
-		},
-		{
-			"invalid padded base64 for value",
-			[]byte(`[10000, "3q2-7w=="]`),
-			`unmarshaling value: cannot base64 url-safe decode: illegal base64 data at input byte 6`,
-		},
-		{
-			"invalid container (object) for CMW",
-			[]byte(`{"type": 10000, "value": "3q2-7w=="}`),
-			`unknown CMW format`,
-		},
-		{
-			"bad type (object) for type",
-			[]byte(`[ { "type": 10000 }, "3q2-7w" ]`),
-			`unmarshaling type: expecting string or uint16, got map[string]interface {}`,
-		},
-		{
-			"bad JSON (missing `]` in array)",
-			[]byte(`[10000, "3q2-7w"`),
-			`unexpected end of JSON input`,
-		},
-		{
-			"bad indicator",
-			[]byte(`[10000, "3q2-7w", "Evidence"]`),
-			`unmarshaling indicator: json: cannot unmarshal string into Go value of type cmw.Indicator`,
-		},
-	}
+func Test_NewCollection(t *testing.T) {
+	ctyp := "tag:example.com,2024:composite-attester"
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var cmw CMW
-			err := cmw.Deserialize(tt.tv)
-			assert.EqualError(t, err, tt.expectedErr)
-		})
-	}
+	cmw, err := NewCollection(ctyp)
+	require.NoError(t, err)
+
+	assert.Equal(t, cmw.GetKind(), KindCollection)
+
+	actual, err := cmw.GetCollectionType()
+	assert.NoError(t, err)
+	assert.Equal(t, ctyp, actual)
+
+	meta, err := cmw.GetCollectionMeta()
+	assert.NoError(t, err)
+	assert.Equal(t, meta, []Meta(nil))
 }
 
-func Test_Deserialize_CBORArray_ko(t *testing.T) {
-	tests := []struct {
-		name        string
-		tv          []byte
-		expectedErr string
-	}{
-		{
-			"empty JSONArray",
-			// echo "[]" | diag2cbor.rb | xxd -i
-			[]byte{0x80},
-			`unknown CMW format`,
-		},
-		{
-			"missing mandatory field in JSONArray (1)",
-			// echo "[10000]" | diag2cbor.rb | xxd -i
-			[]byte{0x81, 0x19, 0x27, 0x10},
-			`unknown CMW format`,
-		},
-		{
-			"too many entries in JSONArray",
-			// echo "[1000, h'deadbeef', 1, false]" | diag2cbor.rb | xxd -i
-			[]byte{0x84, 0x19, 0x03, 0xe8, 0x44, 0xde, 0xad, 0xbe, 0xef, 0x01, 0xf4},
-			`unknown CMW format`,
-		},
-		{
-			"bad type (float) for type",
-			// echo "[1000.23, h'deadbeef']" | diag2cbor.rb | xxd -i
-			[]byte{
-				0x82, 0xfb, 0x40, 0x8f, 0x41, 0xd7, 0x0a, 0x3d, 0x70, 0xa4,
-				0x44, 0xde, 0xad, 0xbe, 0xef,
-			},
-			`invalid CBOR-encoded CMW`,
-		},
-		{
-			"overflow for type",
-			// echo "[65536, h'deadbeef']" | diag2cbor.rb | xxd -i
-			[]byte{
-				0x82, 0x1a, 0x00, 0x01, 0x00, 0x00, 0x44, 0xde, 0xad, 0xbe,
-				0xef,
-			},
-			`invalid CBOR-encoded CMW`,
-		},
-		{
-			"bad type (float) for value",
-			// echo "[65535, 1.2]" | diag2cbor.rb | xxd -i
-			[]byte{
-				0x82, 0x19, 0xff, 0xff, 0xfb, 0x3f, 0xf3, 0x33, 0x33, 0x33,
-				0x33, 0x33, 0x33,
-			},
-			`invalid CBOR-encoded CMW`,
-		},
-	}
+func Test_GetCollectionMeta(t *testing.T) {
+	ctyp := "tag:example.com,2024:composite-attester"
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var cmw CMW
-			err := cmw.Deserialize(tt.tv)
-			assert.EqualError(t, err, tt.expectedErr)
-		})
-	}
+	cmw, err := NewCollection(ctyp)
+	require.NoError(t, err)
+
+	monad, err := NewMonad("text/plain; charset=utf-8", []byte{0xff}, Indicator(Evidence))
+	require.NoError(t, err)
+
+	err = cmw.AddCollectionItem("my-monad", monad)
+	assert.NoError(t, err)
+
+	sub, err := NewCollection("tag:example.com,2024:nested-composite-attester")
+	require.NoError(t, err)
+
+	err = cmw.AddCollectionItem("my-collection", sub)
+	assert.NoError(t, err)
+
+	meta, err := cmw.GetCollectionMeta()
+	assert.NoError(t, err)
+	assert.Equal(t, meta, []Meta{
+		{"my-collection", KindCollection},
+		{"my-monad", KindMonad},
+	})
 }
 
-func Test_Deserialize_CBORTag(t *testing.T) {
-	tests := []struct {
-		name        string
-		tv          []byte
-		expectedErr string
-	}{
-		{
-			"empty CBOR Tag",
-			[]byte{0xda, 0x63, 0x74, 0x01, 0x01},
-			`invalid CBOR-encoded CMW`,
-		},
-		{
-			"bad type (uint) for value",
-			// echo "1668546817(1)" | diag2cbor.rb | xxd -i
-			[]byte{0xda, 0x63, 0x74, 0x01, 0x01, 0x01},
-			`invalid CBOR-encoded CMW`,
-		},
-	}
+func Test_GetCollectionGet(t *testing.T) {
+	ctyp := "tag:example.com,2024:composite-attester"
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var cmw CMW
-			err := cmw.Deserialize(tt.tv)
-			assert.EqualError(t, err, tt.expectedErr)
-		})
-	}
-}
+	cmw, err := NewCollection(ctyp)
+	require.NoError(t, err)
 
-func Test_EncodeArray_sanitize_input(t *testing.T) {
-	var cmw CMW
+	monad, err := NewMonad("text/plain; charset=utf-8", []byte{0xff}, Indicator(Evidence))
+	require.NoError(t, err)
 
-	for _, s := range []Serialization{CBORArray, JSONArray} {
-		cmw.SetSerialization(s)
-		_, err := cmw.Serialize()
-		assert.EqualError(t, err, "type and value MUST be set in CMW")
-	}
+	err = cmw.AddCollectionItem("my-monad", monad)
+	assert.NoError(t, err)
 
-	cmw.SetValue([]byte{0xff})
+	sub, err := NewCollection("tag:example.com,2024:nested-composite-attester")
+	require.NoError(t, err)
 
-	for _, s := range []Serialization{CBORArray, JSONArray} {
-		cmw.SetSerialization(s)
-		_, err := cmw.Serialize()
-		assert.EqualError(t, err, "type and value MUST be set in CMW")
-	}
+	err = cmw.AddCollectionItem("my-collection", sub)
+	assert.NoError(t, err)
 
-	cmw.SetMediaType("")
+	item1, err := cmw.GetCollectionItem("my-monad")
+	assert.NoError(t, err)
+	assert.Equal(t, monad, item1)
 
-	for _, s := range []Serialization{CBORArray, JSONArray} {
-		cmw.SetSerialization(s)
-		_, err := cmw.Serialize()
-		assert.EqualError(t, err, "type and value MUST be set in CMW")
-	}
+	item2, err := cmw.GetCollectionItem("my-collection")
+	assert.NoError(t, err)
+	assert.Equal(t, sub, item2)
 
-	cmw.SetContentFormat(0)
-
-	for _, s := range []Serialization{CBORArray, JSONArray} {
-		cmw.SetSerialization(s)
-		_, err := cmw.Serialize()
-		assert.NoError(t, err)
-	}
-}
-
-func Test_Serialize_invalid_serialization(t *testing.T) {
-	var tv CMW
-
-	tv.SetMediaType("application/vnd.x")
-	tv.SetValue([]byte{0x00})
-
-	_, err := tv.Serialize()
-	assert.Error(t, err, "TPDP")
+	itemNotFound, err := cmw.GetCollectionItem("uh?")
+	assert.EqualError(t, err, `item not found for key "uh?"`)
+	assert.Nil(t, itemNotFound)
 }

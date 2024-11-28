@@ -1,39 +1,180 @@
-// Copyright 2023 Contributors to the Veraison project.
-// SPDX-License-Identifier: Apache-2.0
-
 package cmw
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-
-	"github.com/fxamacker/cbor/v2"
 )
 
-type Serialization uint
-
-const (
-	UnknownSerialization = Serialization(iota)
-	JSONArray
-	CBORArray
-	CBORTag
-)
-
-// a CMW object holds the internal representation of a RATS conceptual message
-// wrapper
+// CMW holds the internal representation of a RATS conceptual message wrapper
 type CMW struct {
-	typ           Type
-	val           Value
-	ind           Indicator
-	serialization Serialization
+	kind Kind
+
+	monad      // Record CMW or CBOR-encoded Tag CMW
+	collection // Collection CMW
 }
 
-func (o *CMW) SetMediaType(v string)     { _ = o.typ.Set(v) }
-func (o *CMW) SetContentFormat(v uint16) { _ = o.typ.Set(v) }
-func (o *CMW) SetTagNumber(v uint64)     { _ = o.typ.Set(v) }
-func (o *CMW) SetValue(v []byte)         { _ = o.val.Set(v) }
-func (o *CMW) SetIndicators(indicators ...Indicator) {
+type Kind uint
+
+const (
+	KindUnknown = Kind(iota)
+	KindMonad
+	KindCollection
+)
+
+func (o Kind) String() string {
+	switch o {
+	case KindCollection:
+		return "collection"
+	case KindMonad:
+		return "monad"
+	case KindUnknown:
+		fallthrough
+	default:
+		return "unknown"
+	}
+}
+
+func (o CMW) GetKind() Kind { return o.kind }
+func (o CMW) GetFormat() Format {
+	switch o.kind {
+	case KindMonad:
+		return o.monad.format
+	case KindCollection:
+		return o.collection.format
+	default:
+		return FormatUnknown
+	}
+}
+
+type Format uint
+
+const (
+	FormatUnknown = Format(iota)
+	// JSON formats
+	FormatJSONRecord
+	FormatJSONCollection
+	// CBOR formats
+	FormatCBORRecord
+	FormatCBORCollection
+	FormatCBORTag
+)
+
+func (o Format) String() string {
+	switch o {
+	case FormatJSONRecord:
+		return "JSON record"
+	case FormatJSONCollection:
+		return "JSON collection"
+	case FormatCBORRecord:
+		return "CBOR record"
+	case FormatCBORCollection:
+		return "CBOR collection"
+	case FormatCBORTag:
+		return "CBOR tag"
+	case FormatUnknown:
+		fallthrough
+	default:
+		return "unknown"
+	}
+}
+
+func NewMonad(mediaType any, value []byte, indicators ...Indicator) (*CMW, error) {
+	var c CMW
+	if err := c.val.Set(value); err != nil {
+		return nil, err
+	}
+	if err := c.typ.Set(mediaType); err != nil {
+		return nil, err
+	}
+	c.setIndicators(indicators...)
+	c.kind = KindMonad
+	return &c, nil
+}
+
+func (o CMW) GetMonadType() (string, error) {
+	if o.kind != KindMonad {
+		return "", fmt.Errorf("want monad, got %q", o.kind)
+	}
+	return o.monad.getType(), nil
+}
+
+func (o CMW) GetMonadValue() ([]byte, error) {
+	if o.kind != KindMonad {
+		return nil, fmt.Errorf("want monad, got %q", o.kind)
+	}
+	return o.monad.getValue(), nil
+}
+
+func (o CMW) GetMonadIndicator() (Indicator, error) {
+	if o.kind != KindMonad {
+		return IndicatorNone, fmt.Errorf("want monad, got %q", o.kind)
+	}
+	return o.monad.getIndicator(), nil
+}
+
+func (o *CMW) UseCBORTagFormat() { o.monad.format = FormatCBORTag }
+
+// NewCollection instantiate a new Collection CMW with the supplied __cmwc_t
+// Pass an empty string to avoid setting __cmwc_t
+func NewCollection(cmwct string) (*CMW, error) {
+	if cmwct != "" {
+		if err := validateCollectionType(cmwct); err != nil {
+			return nil, err
+		}
+	}
+	var c CMW
+	c.cmap = make(map[any]CMW)
+	c.ctyp = cmwct
+	c.kind = KindCollection
+	return &c, nil
+}
+
+// GetCollectionType returns the Collection CMW's __cmwc_t
+// If __cmwc_t is not set, an empty string is returned
+func (o CMW) GetCollectionType() (string, error) {
+	if o.kind != KindCollection {
+		return "", fmt.Errorf("want collection, got %q", o.kind)
+	}
+	return o.collection.getType(), nil
+}
+
+func (o *CMW) AddCollectionItem(key any, node *CMW) error {
+	if o.kind != KindCollection {
+		return fmt.Errorf("want collection, got %q", o.kind)
+	}
+	err := o.collection.addItem(key, node)
+	return err
+}
+
+func (o CMW) GetCollectionItem(key any) (*CMW, error) {
+	if o.kind != KindCollection {
+		return nil, fmt.Errorf("want collection, got %q", o.kind)
+	}
+	return o.collection.getItem(key)
+}
+
+func (o CMW) ValidateCollection() error {
+	if o.kind != KindCollection {
+		return fmt.Errorf("want collection, got %q", o.kind)
+	}
+	return o.collection.validate()
+}
+
+type Meta struct {
+	Key  any
+	Kind Kind
+}
+
+// GetCollectionMeta retrieves a (sorted) list of keys and associated types in a
+// collection
+func (o *CMW) GetCollectionMeta() ([]Meta, error) {
+	if o.kind != KindCollection {
+		return nil, fmt.Errorf("want collection, got %q", o.kind)
+	}
+	return o.collection.getMeta(), nil
+}
+
+func (o *CMW) setIndicators(indicators ...Indicator) {
 	var v Indicator
 
 	for _, ind := range indicators {
@@ -42,182 +183,111 @@ func (o *CMW) SetIndicators(indicators ...Indicator) {
 
 	o.ind = v
 }
-func (o *CMW) SetSerialization(s Serialization) { o.serialization = s }
 
-func (o CMW) GetValue() []byte                { return o.val }
-func (o CMW) GetType() string                 { return o.typ.String() }
-func (o CMW) GetIndicator() Indicator         { return o.ind }
-func (o CMW) GetSerialization() Serialization { return o.serialization }
-
-// Deserialize a CMW
-func (o *CMW) Deserialize(b []byte) error {
-	s := sniff(b)
-
-	o.serialization = s
-
-	switch s {
-	case JSONArray:
-		return o.UnmarshalJSON(b)
-	case CBORArray, CBORTag:
-		return o.UnmarshalCBOR(b)
+func (o CMW) MarshalJSON() ([]byte, error) {
+	switch o.kind {
+	case KindMonad:
+		return o.monad.MarshalJSON()
+	case KindCollection:
+		return o.collection.MarshalJSON()
+	default:
+		return nil, errors.New("unknown CMW kind")
 	}
-
-	return errors.New("unknown CMW format")
 }
-
-// Serialize a CMW according to its provided Serialization
-func (o CMW) Serialize() ([]byte, error) {
-	s := o.serialization
-	switch s {
-	case JSONArray:
-		return o.MarshalJSON()
-	case CBORArray, CBORTag:
-		return o.MarshalCBOR()
-	}
-	return nil, fmt.Errorf("invalid serialization format %d", s)
-}
-
-func (o CMW) MarshalJSON() ([]byte, error) { return arrayEncode(json.Marshal, &o) }
 
 func (o CMW) MarshalCBOR() ([]byte, error) {
-	s := o.serialization
-	switch s {
-	case CBORArray:
-		return arrayEncode(cbor.Marshal, &o)
-	case CBORTag:
-		return o.encodeCBORTag()
+	switch o.kind {
+	case KindMonad:
+		return o.monad.MarshalCBOR()
+	case KindCollection:
+		return o.collection.MarshalCBOR()
+	default:
+		return nil, errors.New("unknown CMW kind")
 	}
-	return nil, fmt.Errorf("invalid serialization format: want CBORArray or CBORTag, got %d", s)
-}
-
-func (o CMW) encodeCBORTag() ([]byte, error) {
-	var (
-		tag cbor.RawTag
-		err error
-	)
-
-	if !o.typ.IsSet() || !o.val.IsSet() {
-		return nil, fmt.Errorf("type and value MUST be set in CMW")
-	}
-
-	tag.Number, err = o.typ.TagNumber()
-	if err != nil {
-		return nil, fmt.Errorf("getting a suitable tag value: %w", err)
-	}
-
-	tag.Content, err = cbor.Marshal(o.val)
-	if err != nil {
-		return nil, fmt.Errorf("marshaling tag value: %w", err)
-	}
-
-	return tag.MarshalCBOR()
-}
-
-func (o *CMW) UnmarshalCBOR(b []byte) error {
-	if arrayDecode[cbor.RawMessage](cbor.Unmarshal, b, o) == nil {
-		o.serialization = CBORArray
-		return nil
-	}
-
-	if o.decodeCBORTag(b) == nil {
-		// the serialization attribute is set by decodeCBORTag
-		return nil
-	}
-
-	return errors.New("invalid CBOR-encoded CMW")
 }
 
 func (o *CMW) UnmarshalJSON(b []byte) error {
-	err := arrayDecode[json.RawMessage](json.Unmarshal, b, o)
-	o.serialization = JSONArray
-	return err
-}
-
-func (o *CMW) decodeCBORTag(b []byte) error {
-	var (
-		v   cbor.RawTag
-		m   []byte
-		err error
-	)
-
-	if err = v.UnmarshalCBOR(b); err != nil {
-		return fmt.Errorf("unmarshal CMW CBOR Tag: %w", err)
-	}
-
-	if err = cbor.Unmarshal(v.Content, &m); err != nil {
-		return fmt.Errorf("unmarshal CMW CBOR Tag bstr-wrapped value: %w", err)
-	}
-
-	_ = o.typ.Set(v.Number)
-	_ = o.val.Set(m)
-	o.serialization = CBORTag
-
-	return nil
-}
-
-func sniff(b []byte) Serialization {
 	if len(b) == 0 {
-		return UnknownSerialization
+		return errors.New("empty buffer")
 	}
 
-	if b[0] == 0x82 || b[0] == 0x83 {
-		return CBORArray
-	} else if b[0] >= 0xc0 && b[0] <= 0xdb {
-		return CBORTag
-	} else if b[0] == 0x5b {
-		return JSONArray
-	}
+	start := b[0]
 
-	return UnknownSerialization
-}
-
-type (
-	arrayDecoder func([]byte, any) error
-	arrayEncoder func(any) ([]byte, error)
-)
-
-func arrayDecode[V json.RawMessage | cbor.RawMessage](
-	dec arrayDecoder, b []byte, o *CMW,
-) error {
-	var a []V
-
-	if err := dec(b, &a); err != nil {
-		return err
-	}
-
-	alen := len(a)
-
-	if alen < 2 || alen > 3 {
-		return fmt.Errorf("wrong number of entries (%d) in the CMW array", alen)
-	}
-
-	if err := dec(a[0], &o.typ); err != nil {
-		return fmt.Errorf("unmarshaling type: %w", err)
-	}
-
-	if err := dec(a[1], &o.val); err != nil {
-		return fmt.Errorf("unmarshaling value: %w", err)
-	}
-
-	if alen == 3 {
-		if err := dec(a[2], &o.ind); err != nil {
-			return fmt.Errorf("unmarshaling indicator: %w", err)
+	switch start {
+	case '[':
+		if err := o.monad.UnmarshalJSON(b); err != nil {
+			return err
 		}
+		o.kind = KindMonad
+	case '{':
+		if err := o.collection.UnmarshalJSON(b); err != nil {
+			return err
+		}
+		o.kind = KindCollection
+	default:
+		return fmt.Errorf("want JSON object or JSON array start symbols, got: 0x%02x", start)
 	}
 
 	return nil
 }
 
-func arrayEncode(enc arrayEncoder, o *CMW) ([]byte, error) {
-	if !o.typ.IsSet() || !o.val.IsSet() {
-		return nil, fmt.Errorf("type and value MUST be set in CMW")
+func (o *CMW) UnmarshalCBOR(b []byte) error {
+	if len(b) == 0 {
+		return errors.New("empty buffer")
 	}
 
-	a := []any{o.typ, o.val}
+	start := b[0]
 
-	if !o.ind.Empty() {
-		a = append(a, o.ind)
+	switch {
+	case startCBORRecord(start) || startCBORTag(start):
+		if err := o.monad.UnmarshalCBOR(b); err != nil {
+			return err
+		}
+		o.kind = KindMonad
+	case startCBORCollection(start):
+		if err := o.collection.UnmarshalCBOR(b); err != nil {
+			return err
+		}
+		o.kind = KindCollection
+	default:
+		return fmt.Errorf("want CBOR map, CBOR array or CBOR Tag start symbols, got: 0x%02x", start)
 	}
 
-	return enc(a)
+	return nil
+}
+
+func (o *CMW) Deserialize(b []byte) error {
+	if len(b) == 0 {
+		return errors.New("empty buffer")
+	}
+	s := b[0]
+	if startCBORCollection(s) || startCBORRecord(s) || startCBORTag(s) {
+		return o.UnmarshalCBOR(b)
+	} else if startJSONRecord(s) || startJSONCollection(s) {
+		return o.UnmarshalJSON(b)
+	} else {
+		return fmt.Errorf("unknown start symbol for CMW: %c", b)
+	}
+}
+
+func Sniff(b []byte) Format {
+	if len(b) == 0 {
+		return FormatUnknown
+	}
+
+	start := b[0]
+
+	if startCBORCollection(start) {
+		return FormatCBORCollection
+	} else if startCBORRecord(start) {
+		return FormatCBORRecord
+	} else if startCBORTag(start) {
+		return FormatCBORTag
+	} else if startJSONCollection(start) {
+		return FormatJSONCollection
+	} else if startJSONRecord(start) {
+		return FormatJSONRecord
+	}
+
+	return FormatUnknown
 }

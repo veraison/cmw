@@ -1,10 +1,10 @@
 module github.com/veraison/cmw
 
-go 1.19
+go 1.23.0
 
 require (
-	github.com/fxamacker/cbor/v2 v2.4.0
-	github.com/stretchr/testify v1.8.2
+	github.com/fxamacker/cbor/v2 v2.7.0
+	github.com/stretchr/testify v1.9.0
 )
 
 require (
