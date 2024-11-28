@@ -1,19 +1,20 @@
-// Copyright 2023 Contributors to the Veraison project.
+// Copyright 2023-2024 Contributors to the Veraison project.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmw
 
 import (
-	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
-
-	"github.com/fxamacker/cbor/v2"
 )
 
 type Value []byte
 
 func (o *Value) Set(v []byte) error {
+	if len(v) == 0 {
+		return errors.New("empty value")
+	}
 	*o = v
 	return nil
 }
@@ -28,7 +29,7 @@ func (o *Value) UnmarshalJSON(b []byte) error {
 		err error
 	)
 
-	if v, err = base64.RawURLEncoding.DecodeString(string(b[1 : len(b)-1])); err != nil {
+	if v, err = b64uDecode(string(b[1 : len(b)-1])); err != nil {
 		return fmt.Errorf("cannot base64 url-safe decode: %w", err)
 	}
 
@@ -38,7 +39,7 @@ func (o *Value) UnmarshalJSON(b []byte) error {
 }
 
 func (o Value) MarshalJSON() ([]byte, error) {
-	s := base64.RawURLEncoding.EncodeToString([]byte(o))
+	s := b64uEncode([]byte(o))
 	return json.Marshal(s)
 }
 
@@ -48,7 +49,7 @@ func (o *Value) UnmarshalCBOR(b []byte) error {
 		err error
 	)
 
-	if err = cbor.Unmarshal(b, &v); err != nil {
+	if err = dm.Unmarshal(b, &v); err != nil {
 		return fmt.Errorf("cannot decode value: %w", err)
 	}
 
@@ -58,5 +59,5 @@ func (o *Value) UnmarshalCBOR(b []byte) error {
 }
 
 func (o Value) MarshalCBOR() ([]byte, error) {
-	return cbor.Marshal([]byte(o))
+	return em.Marshal([]byte(o))
 }

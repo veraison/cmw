@@ -4,18 +4,22 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_TN_RoundTrip(t *testing.T) {
 	for cf := uint16(CfMin); cf < CfMax; cf++ {
-		actual, err := CF(TN(cf))
+		tn, err := TN(cf)
+		require.NoError(t, err)
+		actual, err := CF(tn)
 		assert.NoError(t, err)
 		assert.Equal(t, cf, actual)
 	}
 }
 
 func Test_TN_OutOfRange(t *testing.T) {
-	assert.Equal(t, TN(65535), uint64(18446744073709551615))
+	_, err := TN(65535)
+	assert.EqualError(t, err, "C-F ID 65535 out of range")
 }
 
 func Test_CF_OutOfRange(t *testing.T) {

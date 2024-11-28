@@ -6,9 +6,8 @@ package cmw
 import (
 	"encoding/json"
 	"fmt"
+	"mime"
 	"strconv"
-
-	"github.com/fxamacker/cbor/v2"
 )
 
 type Type struct {
@@ -41,10 +40,10 @@ func (o Type) String() string {
 }
 
 func (o Type) MarshalJSON() ([]byte, error) { return typeEncode(json.Marshal, &o) }
-func (o Type) MarshalCBOR() ([]byte, error) { return typeEncode(cbor.Marshal, &o) }
+func (o Type) MarshalCBOR() ([]byte, error) { return typeEncode(em.Marshal, &o) }
 
 func (o *Type) UnmarshalJSON(b []byte) error { return typeDecode(json.Unmarshal, b, o) }
-func (o *Type) UnmarshalCBOR(b []byte) error { return typeDecode(cbor.Unmarshal, b, o) }
+func (o *Type) UnmarshalCBOR(b []byte) error { return typeDecode(dm.Unmarshal, b, o) }
 
 type (
 	typeDecoder func([]byte, any) error
@@ -99,9 +98,9 @@ func (o Type) TagNumber() (uint64, error) {
 		if !ok {
 			return 0, fmt.Errorf("media type %q has no registered CoAP Content-Format", v)
 		}
-		return TN(cf), nil
+		return TN(cf)
 	case uint16:
-		return TN(v), nil
+		return TN(v)
 	case uint64:
 		return v, nil
 	default:
@@ -126,8 +125,12 @@ func (o Type) IsSet() bool {
 
 func (o *Type) Set(v any) error {
 	switch t := v.(type) {
-	case string, uint16, uint64:
-		break
+	case string:
+		if _, _, err := mime.ParseMediaType(t); err != nil {
+			return fmt.Errorf("bad media type: %w", err)
+		}
+	case uint64, uint16:
+		// no checks needed
 	default:
 		return fmt.Errorf("unsupported type %T for CMW type", t)
 	}
