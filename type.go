@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-
-	"github.com/fxamacker/cbor/v2"
 )
 
 type Type struct {
@@ -41,10 +39,10 @@ func (o Type) String() string {
 }
 
 func (o Type) MarshalJSON() ([]byte, error) { return typeEncode(json.Marshal, &o) }
-func (o Type) MarshalCBOR() ([]byte, error) { return typeEncode(cbor.Marshal, &o) }
+func (o Type) MarshalCBOR() ([]byte, error) { return typeEncode(em.Marshal, &o) }
 
 func (o *Type) UnmarshalJSON(b []byte) error { return typeDecode(json.Unmarshal, b, o) }
-func (o *Type) UnmarshalCBOR(b []byte) error { return typeDecode(cbor.Unmarshal, b, o) }
+func (o *Type) UnmarshalCBOR(b []byte) error { return typeDecode(dm.Unmarshal, b, o) }
 
 type (
 	typeDecoder func([]byte, any) error
