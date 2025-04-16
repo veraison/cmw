@@ -1,7 +1,6 @@
 package cmw
 
 import (
-	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"errors"
@@ -16,10 +15,6 @@ const (
 )
 
 var OidExtCmw = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 1, 35}
-
-func ExtractFromCertificate(c *x509.Certificate) (*CMW, error) {
-	return nil, errors.New("TODO")
-}
 
 // EncodeX509Extension encodes the target CMW as either JSON or CBOR (according
 // to the specified choice), and wraps it in a X509 extension that can be used
