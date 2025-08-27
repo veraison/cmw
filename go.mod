@@ -4,7 +4,8 @@ go 1.23.0
 
 require (
 	github.com/fxamacker/cbor/v2 v2.7.0
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
+	github.com/veraison/go-cose v1.3.0
 )
 
 require (
