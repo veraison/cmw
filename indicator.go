@@ -18,6 +18,7 @@ const (
 	AttestationResults
 	TrustAnchors
 )
+const MaxIndicatorValue = (TrustAnchors << 1) - 1
 
 const IndicatorNone = 0
 

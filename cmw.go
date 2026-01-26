@@ -153,11 +153,28 @@ func (o CMW) GetCollectionItem(key any) (*CMW, error) {
 	return o.collection.getItem(key)
 }
 
+// ValidateCollection checks whether a CMW collection is valid or not
+//
+// Deprecated: use Valid instead
 func (o CMW) ValidateCollection() error {
 	if o.kind != KindCollection {
 		return fmt.Errorf("want collection, got %q", o.kind)
 	}
 	return o.collection.validate()
+}
+
+// Valid checks whether a CMW is valid.
+// It works for both monad and collection kinds and recursively validates nested structures.
+// It returns nil if the CMW is valid, or an error describing the validation failure.
+func (o CMW) Valid() error {
+	switch o.kind {
+	case KindMonad:
+		return o.monad.validate()
+	case KindCollection:
+		return o.collection.validate()
+	default:
+		return fmt.Errorf("unknown kind: %s", o.kind.String())
+	}
 }
 
 type Meta struct {

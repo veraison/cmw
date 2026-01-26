@@ -30,8 +30,17 @@ func (o collection) validate() error {
 	}
 
 	for k, v := range o.cmap {
-		if err := v.validate(); err != nil {
-			return fmt.Errorf("invalid collection at key %q: %w", k, err)
+		switch v.kind {
+		case KindMonad:
+			if err := v.monad.validate(); err != nil {
+				return fmt.Errorf("invalid monad at key %q: %w", k, err)
+			}
+		case KindCollection:
+			if err := v.collection.validate(); err != nil {
+				return fmt.Errorf("invalid collection at key %q: %w", k, err)
+			}
+		default:
+			return fmt.Errorf("unknown CMW kind at key %q: %s", k, v.kind.String())
 		}
 	}
 

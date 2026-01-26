@@ -18,55 +18,53 @@ func Test_Deserialize_monad_ok(t *testing.T) {
 		tv   []byte
 		exp  monad
 	}{
-		/*
-			{
-				"JSON array with media type string",
-				[]byte(`["application/vnd.intel.sgx", "3q2-7w"]`),
-				monad{
-					typ:    Type{"application/vnd.intel.sgx"},
-					val:    []byte{0xde, 0xad, 0xbe, 0xef},
-					ind:    IndicatorNone,
-					format: FormatJSONRecord,
-				},
+		{
+			"JSON array with media type string",
+			[]byte(`["application/vnd.intel.sgx", "3q2-7w"]`),
+			monad{
+				typ:    Type{"application/vnd.intel.sgx"},
+				val:    []byte{0xde, 0xad, 0xbe, 0xef},
+				ind:    IndicatorNone,
+				format: FormatJSONRecord,
 			},
-			{
-				"JSON array with media type string and indicator",
-				[]byte(`["application/vnd.intel.sgx", "3q2-7w", 31]`),
-				monad{
-					Type{"application/vnd.intel.sgx"},
-					[]byte{0xde, 0xad, 0xbe, 0xef},
-					testIndicator,
-					FormatJSONRecord,
-				},
+		},
+		{
+			"JSON array with media type string and indicator",
+			[]byte(`["application/vnd.intel.sgx", "3q2-7w", 31]`),
+			monad{
+				Type{"application/vnd.intel.sgx"},
+				[]byte{0xde, 0xad, 0xbe, 0xef},
+				testIndicator,
+				FormatJSONRecord,
 			},
-			{
-				"CBOR array with CoAP C-F",
-				// echo "[30001, h'deadbeef']" | diag2cbor.rb | xxd -p -i
-				[]byte{0x82, 0x19, 0x75, 0x31, 0x44, 0xde, 0xad, 0xbe, 0xef},
-				monad{
-					Type{uint16(30001)},
-					[]byte{0xde, 0xad, 0xbe, 0xef},
-					IndicatorNone,
-					FormatCBORRecord,
-				},
+		},
+		{
+			"CBOR array with CoAP C-F",
+			// echo "[30001, h'deadbeef']" | diag2cbor.rb | xxd -p -i
+			[]byte{0x82, 0x19, 0x75, 0x31, 0x44, 0xde, 0xad, 0xbe, 0xef},
+			monad{
+				Type{uint16(30001)},
+				[]byte{0xde, 0xad, 0xbe, 0xef},
+				IndicatorNone,
+				FormatCBORRecord,
 			},
-			{
-				"CBOR array with media type string",
-				// echo "[\"application/vnd.intel.sgx\", h'deadbeef']" | diag2cbor.rb | xxd -p -i
-				[]byte{
-					0x82, 0x78, 0x19, 0x61, 0x70, 0x70, 0x6c, 0x69, 0x63, 0x61,
-					0x74, 0x69, 0x6f, 0x6e, 0x2f, 0x76, 0x6e, 0x64, 0x2e, 0x69,
-					0x6e, 0x74, 0x65, 0x6c, 0x2e, 0x73, 0x67, 0x78, 0x44, 0xde,
-					0xad, 0xbe, 0xef,
-				},
-				monad{
-					Type{string("application/vnd.intel.sgx")},
-					[]byte{0xde, 0xad, 0xbe, 0xef},
-					IndicatorNone,
-					FormatCBORRecord,
-				},
+		},
+		{
+			"CBOR array with media type string",
+			// echo "[\"application/vnd.intel.sgx\", h'deadbeef']" | diag2cbor.rb | xxd -p -i
+			[]byte{
+				0x82, 0x78, 0x19, 0x61, 0x70, 0x70, 0x6c, 0x69, 0x63, 0x61,
+				0x74, 0x69, 0x6f, 0x6e, 0x2f, 0x76, 0x6e, 0x64, 0x2e, 0x69,
+				0x6e, 0x74, 0x65, 0x6c, 0x2e, 0x73, 0x67, 0x78, 0x44, 0xde,
+				0xad, 0xbe, 0xef,
 			},
-		*/
+			monad{
+				Type{string("application/vnd.intel.sgx")},
+				[]byte{0xde, 0xad, 0xbe, 0xef},
+				IndicatorNone,
+				FormatCBORRecord,
+			},
+		},
 		{
 			"CBOR tag",
 			// echo "1668576818(h'deadbeef')" | diag2cbor.rb | xxd -p -i
@@ -88,7 +86,8 @@ func Test_Deserialize_monad_ok(t *testing.T) {
 
 			err := actual.Deserialize(tt.tv)
 			assert.NoError(t, err)
-
+			err = actual.monad.validate()
+			assert.NoError(t, err)
 			assert.Equal(t, KindMonad, actual.GetKind())
 			assert.Equal(t, tt.exp.format, actual.GetFormat())
 			assert.Equal(t, tt.exp, actual.monad)
@@ -463,4 +462,103 @@ func Test_NewMonad_fail_bad_mediatype(t *testing.T) {
 func Test_NewMonad_fail_bad_type(t *testing.T) {
 	_, err := NewMonad(0xffffffff, []byte{0x00})
 	assert.EqualError(t, err, `unsupported type int for CMW type`)
+}
+func Test_Validate_monad_ok(t *testing.T) {
+	tests := []struct {
+		name string
+		typ  any
+		val  []byte
+		ind  []Indicator
+	}{
+		{
+			"minimal with string type",
+			"application/vnd.intel.sgx",
+			[]byte{0xde, 0xad, 0xbe, 0xef},
+			[]Indicator{},
+		},
+		{
+			"minimal with CoAP Content-Format",
+			uint16(30001),
+			[]byte{0xde, 0xad, 0xbe, 0xef},
+			[]Indicator{},
+		},
+		{
+			"with single indicator",
+			"application/eat+cwt",
+			[]byte{0xde, 0xad, 0xbe, 0xef},
+			[]Indicator{AttestationResults},
+		},
+		{
+			"with multiple indicators",
+			"application/corim+signed",
+			[]byte{0xde, 0xad, 0xbe, 0xef},
+			[]Indicator{ReferenceValues, Endorsements, TrustAnchors},
+		},
+		{
+			"with maximum valid indicator value (31)",
+			"application/evidence",
+			[]byte{0xff},
+			[]Indicator{Indicator(31)},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmw, err := NewMonad(tt.typ, tt.val, tt.ind...)
+			require.NoError(t, err)
+
+			err = cmw.monad.validate()
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func Test_Validate_monad_fails(t *testing.T) {
+	tests := []struct {
+		name        string
+		tv          *monad
+		expectedErr string
+	}{
+		{
+			"type not set",
+			&monad{
+				val: []byte{0xde, 0xad, 0xbe, 0xef},
+				ind: IndicatorNone,
+			},
+			"type not set",
+		},
+		{
+			"value not set",
+			&monad{
+				typ: Type{"application/evidence"},
+				ind: IndicatorNone,
+			},
+			"value not set",
+		},
+		{
+			"indicator exceeds maximum (32)",
+			&monad{
+				typ: Type{"application/evidence"},
+				val: []byte{0xde, 0xad, 0xbe, 0xef},
+				ind: Indicator(32),
+			},
+			"indicator value 32 exceeds maximum 31",
+		},
+		{
+			"indicator exceeds maximum (255)",
+			&monad{
+				typ: Type{"application/evidence"},
+				val: []byte{0xde, 0xad, 0xbe, 0xef},
+				ind: Indicator(255),
+			},
+			"indicator value 255 exceeds maximum 31",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.tv.validate()
+			assert.EqualError(t, err, tt.expectedErr)
+		})
+	}
 }

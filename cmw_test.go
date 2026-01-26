@@ -180,3 +180,19 @@ func Test_GetCollectionGet(t *testing.T) {
 	assert.EqualError(t, err, `item not found for key "uh?"`)
 	assert.Nil(t, itemNotFound)
 }
+
+func Test_Valid(t *testing.T) {
+	typ := "text/plain; charset=utf-8"
+	val := []byte{0xff}
+	ind := Indicator(Evidence)
+
+	cmw, err := NewMonad(typ, val, ind)
+	require.NoError(t, err)
+	err = cmw.Valid()
+	require.NoError(t, err)
+
+	cmw = makeCMWCollection()
+	require.NoError(t, err)
+	err = cmw.Valid()
+	require.NoError(t, err)
+}
