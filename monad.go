@@ -2,6 +2,7 @@ package cmw
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/fxamacker/cbor/v2"
@@ -57,6 +58,31 @@ func (o *monad) UnmarshalCBOR(b []byte) error {
 	} else {
 		// unreachable
 		panic(fmt.Sprintf("want CBOR Tag or CBOR array, got 0x%02x", b[0]))
+	}
+
+	return nil
+}
+
+// validate validates the monad according to draft-ietf-rats-msg-wrap-23 Section 3.1
+func (o monad) validate() error {
+	// Type field MUST be set (either media-type string or CoAP Content-Format ID)
+	if !o.typ.IsSet() {
+		return errors.New("type not set")
+	}
+
+	// Value field MUST be set and non-empty
+	// base64url-encoding for JSON already checked during unmarshaling
+	if !o.val.IsSet() {
+		return errors.New("value not set")
+	}
+
+	// - MUST be non-zero if present (this is already checked during unmarshaling)
+	// - Any combination between 1 and 2^32-1 is allowed
+	// - However, only bits 0-4 are currently registered (values 1-31)
+	if !o.ind.Empty() {
+		if uint(o.ind) > MaxIndicatorValue {
+			return fmt.Errorf("indicator value %d exceeds maximum %d", uint(o.ind), MaxIndicatorValue)
+		}
 	}
 
 	return nil
@@ -142,6 +168,9 @@ func recordDecode[V json.RawMessage | cbor.RawMessage](
 	if alen == 3 {
 		if err := dec(a[2], &o.ind); err != nil {
 			return fmt.Errorf("unmarshaling indicator: %w", err)
+		}
+		if o.ind == 0 {
+			return errors.New("indicator field, if present, MUST be non-zero")
 		}
 	}
 

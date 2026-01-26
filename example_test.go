@@ -147,7 +147,10 @@ func Example_roundtrip_JSON_collection() {
 	if err != nil {
 		log.Fatalf("unmarshal JSON collection failed: %v", err)
 	}
-
+	err = o.Valid()
+	if err != nil {
+		log.Fatalf("validate JSON collection failed: %v", err)
+	}
 	b, err := o.MarshalJSON()
 	if err != nil {
 		log.Fatalf("marshal collection to JSON failed: %v", err)

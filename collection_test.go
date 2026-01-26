@@ -79,7 +79,7 @@ func Test_Collection_JSON_Deserialize_fail_inner(t *testing.T) {
 	var actual CMW
 	err := actual.UnmarshalJSON(tv)
 	require.NoError(t, err)
-	err = actual.ValidateCollection()
+	err = actual.Valid()
 	assert.EqualError(t, err, `invalid collection at key "a": empty CMW collection`)
 }
 
