@@ -16,9 +16,9 @@ const (
 	Endorsements
 	Evidence
 	AttestationResults
-	TrustAnchors
+	AppraisalPolicy
 )
-const MaxIndicatorValue = (TrustAnchors << 1) - 1
+const MaxIndicatorValue = (AppraisalPolicy << 1) - 1
 
 const IndicatorNone = 0
 
@@ -27,6 +27,7 @@ var indMap = map[Indicator]string{
 	Endorsements:       "endorsements",
 	Evidence:           "evidence",
 	AttestationResults: "attestation results",
+	AppraisalPolicy:    "appraisal policy",
 }
 
 func (o *Indicator) Set(v Indicator)     { *o |= v }
