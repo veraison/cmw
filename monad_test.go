@@ -112,7 +112,7 @@ func Test_MarshalJSON_record_ok(t *testing.T) {
 			args{
 				"application/corim+signed",
 				[]byte{0xde, 0xad, 0xbe, 0xef},
-				[]Indicator{ReferenceValues, Endorsements, TrustAnchors},
+				[]Indicator{ReferenceValues, Endorsements, AppraisalPolicy},
 			},
 			`[ "application/corim+signed", "3q2-7w", 19 ]`,
 		},
@@ -165,7 +165,7 @@ func Test_MarshalCBOR_record_ok(t *testing.T) {
 			args{
 				10000,
 				[]byte{0xde, 0xad, 0xbe, 0xef},
-				[]Indicator{ReferenceValues, Endorsements, TrustAnchors},
+				[]Indicator{ReferenceValues, Endorsements, AppraisalPolicy},
 			},
 			[]byte{0x83, 0x19, 0x27, 0x10, 0x44, 0xde, 0xad, 0xbe, 0xef, 0x13},
 		},
@@ -492,7 +492,7 @@ func Test_Validate_monad_ok(t *testing.T) {
 			"with multiple indicators",
 			"application/corim+signed",
 			[]byte{0xde, 0xad, 0xbe, 0xef},
-			[]Indicator{ReferenceValues, Endorsements, TrustAnchors},
+			[]Indicator{ReferenceValues, Endorsements, AppraisalPolicy},
 		},
 		{
 			"with maximum valid indicator value (31)",
