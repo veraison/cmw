@@ -196,3 +196,15 @@ func Test_Valid(t *testing.T) {
 	err = cmw.Valid()
 	require.NoError(t, err)
 }
+
+func Test_NewMonadValid(t *testing.T) {
+	typ := "text/plain; charset=utf-8"
+	val := []byte{0xff}
+	ind := Indicator(Evidence)
+
+	cmw, err := NewMonad(typ, val, ind)
+	require.NoError(t, err)
+	cmw.kind = KindUnknown
+	err = cmw.monad.validate()
+	require.NoError(t, err)
+}
