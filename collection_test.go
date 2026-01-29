@@ -166,21 +166,19 @@ func Test_Collection_CBOR_Deserialize_and_iterate(t *testing.T) {
 	}
 }
 
-func Test_Collection_Deserialize_JSON_ok(t *testing.T) {
+func Test_Collection_Decode_JSON_ok(t *testing.T) {
 	tv := mustReadFile(t, "testdata/collection-ok.json")
 
-	var c CMW
-	err := c.Deserialize(tv)
+	c, err := Decode(tv)
 	assert.NoError(t, err)
 	assert.Equal(t, KindCollection, c.GetKind())
 	assert.Equal(t, FormatJSONCollection, c.GetFormat())
 }
 
-func Test_Collection_Deserialize_CBOR_ok(t *testing.T) {
+func Test_Collection_Decode_CBOR_ok(t *testing.T) {
 	tv := mustReadFile(t, "testdata/collection-cbor-ok.cbor")
 
-	var c CMW
-	err := c.Deserialize(tv)
+	c, err := Decode(tv)
 	assert.NoError(t, err)
 	assert.Equal(t, KindCollection, c.GetKind())
 	assert.Equal(t, FormatCBORCollection, c.GetFormat())
