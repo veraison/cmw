@@ -12,6 +12,37 @@ jobs:
       uses: actions/checkout@v4
     - name: Go Coverage
       run: |
+        set -euo pipefail
+        echo "Go version:"
         go version
-        go test -short -cover | grep -o "coverage:.*of statements$" | python scripts/cov.py
+        echo "Running tests with coverage..."
+        
+        # Run tests and capture coverage output with proper error handling
+        if ! coverage_output=$(go test -short -cover 2>&1); then
+          echo "Error: Go tests failed"
+          echo "$coverage_output"
+          exit 1
+        fi
+        
+        echo "$coverage_output"
+        
+        # Extract coverage information with validation
+        if ! coverage_lines=$(echo "$coverage_output" | grep -o "coverage:.*of statements$"); then
+          echo "Error: No coverage information found in test output"
+          exit 1
+        fi
+        
+        # Validate coverage script exists
+        if [[ ! -f "scripts/cov.py" ]]; then
+          echo "Error: Coverage script scripts/cov.py not found"
+          exit 1
+        fi
+        
+        # Process coverage with error checking
+        if ! echo "$coverage_lines" | python scripts/cov.py; then
+          echo "Error: Coverage validation failed"
+          exit 1
+        fi
+        
+        echo "Coverage validation passed!"
       shell: bash

@@ -12,5 +12,16 @@ jobs:
       uses: actions/checkout@v4
     - name: Run tests
       run: |
+        set -euo pipefail
+        echo "Go version:"
         go version
-        go test -v
+        echo "Running tests..."
+        
+        # Run tests with proper error handling
+        if ! go test -v; then
+          echo "Error: Tests failed"
+          exit 1
+        fi
+        
+        echo "All tests passed successfully!"
+      shell: bash
