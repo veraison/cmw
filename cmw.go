@@ -273,6 +273,19 @@ func (o *CMW) UnmarshalCBOR(b []byte) error {
 	return nil
 }
 
+// Decode decodes a JSON- or CBOR-encoded CMW to a CMW object.
+// On success, a pointer to the newly allocated CMW structure is returned.
+func Decode(b []byte) (*CMW, error) {
+	var o CMW
+	if err := o.Deserialize(b); err != nil {
+		return nil, err
+	}
+	return &o, nil
+}
+
+// Deserialize deserializes a JSON- or CBOR-encoded CMW into the target CMW object.
+//
+// Deprecated: use Decode instead.
 func (o *CMW) Deserialize(b []byte) error {
 	if len(b) == 0 {
 		return errors.New("empty buffer")

@@ -82,9 +82,7 @@ func Test_Deserialize_monad_ok(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var actual CMW
-
-			err := actual.Deserialize(tt.tv)
+			actual, err := Decode(tt.tv)
 			assert.NoError(t, err)
 			err = actual.monad.validate()
 			assert.NoError(t, err)
@@ -410,8 +408,7 @@ func Test_UnmarshalCBOR_tag_ko(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var cmw CMW
-			err := cmw.Deserialize(tt.tv)
+			_, err := Decode(tt.tv)
 			assert.EqualError(t, err, tt.expectedErr)
 		})
 	}

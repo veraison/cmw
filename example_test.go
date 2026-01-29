@@ -116,8 +116,6 @@ func Example_decode_JSON_record() {
 }
 
 func Example_roundtrip_JSON_collection() {
-	var o CMW
-
 	ex := []byte(`{
   "bretwaldadom": [
     "application/eat-ucs+cbor",
@@ -143,7 +141,7 @@ func Example_roundtrip_JSON_collection() {
   ]
 }`)
 
-	err := o.Deserialize(ex)
+	o, err := Decode(ex)
 	if err != nil {
 		log.Fatalf("unmarshal JSON collection failed: %v", err)
 	}
