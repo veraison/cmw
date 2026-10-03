@@ -54,7 +54,7 @@ func validateCollectionKey(key any) error {
 		if t == CmwCType {
 			return fmt.Errorf("bad collection key: %s is reserved", CmwCType)
 		}
-		if len(strings.TrimSpace(t)) == 0 {
+		if strings.TrimSpace(t) == "" {
 			return errors.New("bad collection key: empty or whitespace only")
 		}
 		return nil
@@ -65,7 +65,7 @@ func validateCollectionKey(key any) error {
 	}
 }
 
-var oidRe = regexp.MustCompile(`^([0-2])(([.]0)|([.][1-9][0-9]*))*$`)
+var oidRe = regexp.MustCompile(`^([012])(([.]0)|([.][1-9]\d*))*$`)
 
 func validateCollectionType(ctyp string) error {
 	// "__cmwc_t": ~uri / oid
@@ -125,7 +125,11 @@ func (o Meta) getKeyForSorting() string {
 }
 
 func (o collection) getMeta() []Meta {
-	var m []Meta
+	if len(o.cmap) == 0 {
+		return nil
+	}
+
+	m := make([]Meta, 0, len(o.cmap))
 
 	for k, v := range o.cmap {
 		m = append(m, Meta{k, v.kind})

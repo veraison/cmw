@@ -24,7 +24,7 @@ func (o CMW) SignCBOR(signer cose.Signer) ([]byte, error) {
 }
 
 // VerifyCBOR verifies the signed-cbor-cmw using the supplied cose.Verifier.  If
-// the signature is succesfully validated and the payload CMW is correctly
+// the signature is successfully validated and the payload CMW is correctly
 // formatted, the CMW target is populated.
 func (o *CMW) VerifyCBOR(verifier cose.Verifier, cbor []byte) error {
 	var msg cose.Sign1Message

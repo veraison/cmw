@@ -8,7 +8,7 @@ import (
 )
 
 func Test_TN_RoundTrip(t *testing.T) {
-	for cf := uint16(CfMin); cf < CfMax; cf++ {
+	for cf := CfMin; cf < CfMax; cf++ {
 		tn, err := TN(cf)
 		require.NoError(t, err)
 		actual, err := CF(tn)
