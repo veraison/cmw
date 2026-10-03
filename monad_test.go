@@ -396,7 +396,7 @@ func Test_UnmarshalCBOR_tag_ko(t *testing.T) {
 		{
 			"empty CBOR Tag",
 			[]byte{0xda, 0x63, 0x74, 0x01, 0x01},
-			`decoding tag: unmarshal CMW CBOR Tag bstr-wrapped value: EOF`,
+			`decoding tag: unmarshal CMW CBOR Tag: unexpected EOF`,
 		},
 		{
 			"bad type (uint) for value",
