@@ -1,6 +1,6 @@
 module github.com/veraison/cmw
 
-go 1.23.0
+go 1.26.0
 
 require (
 	github.com/fxamacker/cbor/v2 v2.7.0
