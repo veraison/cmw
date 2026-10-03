@@ -1,17 +1,21 @@
-name: cover ≥84%
-on: [push, pull_request]
+name: coverage
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref_name != github.event.repository.default_branch }}
+
 jobs:
   cover:
-    name: Coverage
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/setup-go@v5
-      with:
-        go-version: "1.23.0"
-    - name: Checkout code
-      uses: actions/checkout@v4
-    - name: Go Coverage
-      run: |
-        go version
-        go test -short -cover | grep -o "coverage:.*of statements$" | python scripts/cov.py
-      shell: bash
+    uses: veraison/ci/.github/workflows/go.yml@main
+    with:
+      jobs: 'cover'
+      min-coverage: '84.0'
