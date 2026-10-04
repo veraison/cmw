@@ -1,3 +1,7 @@
+SHELL := /bin/bash
+.SHELLFLAGS := -eo pipefail -c
+.DELETE_ON_ERROR:
+
 MAP_FILE := ../cfmap.go
 
 REGISTRY := core-parameters.xml
@@ -8,9 +12,6 @@ EXE := main
 CLEANFILES :=
 
 zek ?= $(shell command -v zek)
-ifeq ($(strip $(zek)),)
-$(error zek not found. To install zek: 'go install github.com/miku/zek/cmd/zek@latest')
-endif
 
 all: $(MAP_FILE)
 
@@ -21,11 +22,13 @@ $(EXE): $(REGISTRY_GO) ; go build
 
 CLEANFILES += $(EXE)
 
-$(REGISTRY_GO): $(REGISTRY) ; cat $< | $(zek) -P main > $@
+$(REGISTRY_GO): $(REGISTRY)
+	$(if $(strip $(zek)),,$(error zek not found. To install zek: 'go install github.com/miku/zek/cmd/zek@latest'))
+	$(zek) -P main < $< > $@
 
 CLEANFILES += $(REGISTRY_GO)
 
-$(REGISTRY): ; curl -sO $(REGISTRY_URL)
+$(REGISTRY): ; curl -fsS -o $@ $(REGISTRY_URL)
 
 CLEANFILES += $(REGISTRY)
 

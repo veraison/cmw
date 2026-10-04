@@ -41,7 +41,7 @@ func (o monad) MarshalCBOR() ([]byte, error) {
 		return o.encodeCBORTag()
 	}
 	// unreachable
-	panic(fmt.Sprintf("invalid format: want CBOR record or CBOR Tag, got %s", Format(s)))
+	panic(fmt.Sprintf("invalid format: want CBOR record or CBOR Tag, got %s", s))
 }
 
 func (o *monad) UnmarshalCBOR(b []byte) error {
@@ -118,7 +118,7 @@ func (o *monad) decodeCBORTag(b []byte) error {
 		err error
 	)
 
-	if err = v.UnmarshalCBOR(b); err != nil {
+	if err = dm.Unmarshal(b, &v); err != nil {
 		return fmt.Errorf("unmarshal CMW CBOR Tag: %w", err)
 	}
 

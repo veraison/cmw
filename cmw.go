@@ -27,8 +27,6 @@ func (o Kind) String() string {
 		return "collection"
 	case KindMonad:
 		return "monad"
-	case KindUnknown:
-		fallthrough
 	default:
 		return "unknown"
 	}
@@ -71,8 +69,6 @@ func (o Format) String() string {
 		return "CBOR collection"
 	case FormatCBORTag:
 		return "CBOR tag"
-	case FormatUnknown:
-		fallthrough
 	default:
 		return "unknown"
 	}
@@ -102,14 +98,14 @@ func (o CMW) GetMonadValue() ([]byte, error) {
 	if o.kind != KindMonad {
 		return nil, fmt.Errorf("want monad, got %q", o.kind)
 	}
-	return o.monad.getValue(), nil
+	return o.getValue(), nil
 }
 
 func (o CMW) GetMonadIndicator() (Indicator, error) {
 	if o.kind != KindMonad {
 		return IndicatorNone, fmt.Errorf("want monad, got %q", o.kind)
 	}
-	return o.monad.getIndicator(), nil
+	return o.getIndicator(), nil
 }
 
 func (o *CMW) UseCBORTagFormat() { o.monad.format = FormatCBORTag }
@@ -142,7 +138,7 @@ func (o *CMW) AddCollectionItem(key any, node *CMW) error {
 	if o.kind != KindCollection {
 		return fmt.Errorf("want collection, got %q", o.kind)
 	}
-	err := o.collection.addItem(key, node)
+	err := o.addItem(key, node)
 	return err
 }
 
@@ -150,7 +146,7 @@ func (o CMW) GetCollectionItem(key any) (*CMW, error) {
 	if o.kind != KindCollection {
 		return nil, fmt.Errorf("want collection, got %q", o.kind)
 	}
-	return o.collection.getItem(key)
+	return o.getItem(key)
 }
 
 // ValidateCollection checks whether a CMW collection is valid or not
@@ -188,7 +184,7 @@ func (o *CMW) GetCollectionMeta() ([]Meta, error) {
 	if o.kind != KindCollection {
 		return nil, fmt.Errorf("want collection, got %q", o.kind)
 	}
-	return o.collection.getMeta(), nil
+	return o.getMeta(), nil
 }
 
 func (o *CMW) setIndicators(indicators ...Indicator) {

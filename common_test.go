@@ -1,13 +1,13 @@
 package cmw
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"math/big"
 	"testing"
 
 	cose "github.com/veraison/go-cose"
@@ -49,36 +49,45 @@ func getCOSESignerAndVerifier(t *testing.T, keyBytes []byte, alg cose.Algorithm)
 }
 
 func getKey(key map[string]string) (crypto.Signer, error) {
-	switch key["kty"] {
-	case "EC":
-		var c elliptic.Curve
-		switch key["crv"] {
-		case "P-256":
-			c = elliptic.P256()
-		case "P-384":
-			c = elliptic.P384()
-		case "P-521":
-			c = elliptic.P521()
-		default:
-			return nil, errors.New("unsupported EC curve: " + key["crv"])
-		}
-		pkey := &ecdsa.PrivateKey{
-			PublicKey: ecdsa.PublicKey{
-				X:     mustBase64ToBigInt(key["x"]),
-				Y:     mustBase64ToBigInt(key["y"]),
-				Curve: c,
-			},
-			D: mustBase64ToBigInt(key["d"]),
-		}
-		return pkey, nil
+	if key["kty"] != "EC" {
+		return nil, errors.New("unsupported key type: " + key["kty"])
 	}
-	return nil, errors.New("unsupported key type: " + key["kty"])
+
+	var c elliptic.Curve
+	switch key["crv"] {
+	case "P-256":
+		c = elliptic.P256()
+	case "P-384":
+		c = elliptic.P384()
+	case "P-521":
+		c = elliptic.P521()
+	default:
+		return nil, errors.New("unsupported EC curve: " + key["crv"])
+	}
+
+	pkey, err := ecdsa.ParseRawPrivateKey(c, mustBase64Decode(key["d"]))
+	if err != nil {
+		return nil, err
+	}
+
+	// make sure the supplied public key matches the one derived from d
+	pub, err := pkey.PublicKey.Bytes()
+	if err != nil {
+		return nil, err
+	}
+	want := append([]byte{0x04}, mustBase64Decode(key["x"])...)
+	want = append(want, mustBase64Decode(key["y"])...)
+	if !bytes.Equal(pub, want) {
+		return nil, errors.New("EC public key does not match private key")
+	}
+
+	return pkey, nil
 }
 
-func mustBase64ToBigInt(s string) *big.Int {
+func mustBase64Decode(s string) []byte {
 	val, err := base64.RawURLEncoding.DecodeString(s)
 	if err != nil {
 		panic(err)
 	}
-	return new(big.Int).SetBytes(val)
+	return val
 }

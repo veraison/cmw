@@ -6,6 +6,7 @@ package cmw
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"mime"
 	"strconv"
 )
@@ -67,7 +68,7 @@ func typeDecode(dec typeDecoder, b []byte, o *Type) error {
 			return fmt.Errorf("cannot unmarshal %f into uint16", t)
 		}
 	case uint64: // CBOR
-		if t == uint64(uint16(t)) {
+		if t <= math.MaxUint16 {
 			o.val = uint16(t)
 		} else {
 			return fmt.Errorf("cannot unmarshal %d into uint16", t)
@@ -113,11 +114,8 @@ func (o Type) IsSet() bool {
 		return false
 	}
 
-	switch t := o.val.(type) {
-	case string:
-		if t == "" {
-			return false
-		}
+	if t, ok := o.val.(string); ok && t == "" {
+		return false
 	}
 
 	return true

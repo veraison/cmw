@@ -18,10 +18,12 @@ func initCBOREncMode() (en cbor.EncMode, err error) {
 
 func initCBORDecMode() (en cbor.DecMode, err error) {
 	tags := cbor.NewTagSet()
-	tags.Add(
+	if err := tags.Add(
 		cbor.TagOptions{EncTag: cbor.EncTagNone, DecTag: cbor.DecTagOptional},
 		reflect.TypeOf(CMW{}),
-		765)
+		765); err != nil {
+		return nil, err
+	}
 
 	return cbor.DecOptions{}.DecModeWithTags(tags)
 }
