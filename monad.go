@@ -63,7 +63,7 @@ func (o *monad) UnmarshalCBOR(b []byte) error {
 	return nil
 }
 
-// validate validates the monad according to draft-ietf-rats-msg-wrap-23 Section 3.1
+// validate validates the monad according to RFC 9999 Section 3.1
 func (o monad) validate() error {
 	// Type field MUST be set (either media-type string or CoAP Content-Format ID)
 	if !o.typ.IsSet() {
